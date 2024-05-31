@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-
-const Welcome = ({ username, setUsername, room, setRoom }) => {
+import io from "socket.io-client";
+const Welcome = ({ username, setUsername, room, setRoom, setSocket }) => {
   const navigate = useNavigate();
 
   const joinRoom = (e) => {
@@ -10,6 +10,8 @@ const Welcome = ({ username, setUsername, room, setRoom }) => {
       room !== "select-room" &&
       room.trim().length > 0
     ) {
+      const socket = io.connect("http://localhost:3000");
+      setSocket(socket);
       navigate("/chat", { replace: true });
     } else {
       alert("Fill all user info.");
