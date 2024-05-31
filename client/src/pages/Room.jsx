@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   ArrowRightOnRectangleIcon,
@@ -7,24 +7,69 @@ import {
   UserGroupIcon,
   UserIcon,
 } from "@heroicons/react/24/solid";
+
+import { SERVER_URL } from "../utils/helper";
 import { useNavigate } from "react-router-dom";
 
 const Room = ({ username, room, socket }) => {
-  const [roomUsers, setRoomUsers] = useState(["user1", "user2", "user3"]);
+  const [roomUsers, setRoomUsers] = useState([]);
   const [receivedMessages, setReceivedMessages] = useState([]);
+  const [message, setMessage] = useState("");
   const navigate = useNavigate();
 
+  const boxDivRef = useRef(null);
+
   useEffect(() => {
-    console.log(socket);
+    async function getOldMessage() {
+      const response = await fetch(`${SERVER_URL}/chat/${room}`);
+      if (response.status === 403) {
+        return navigate("/");
+      }
+
+      const data = await response.json();
+
+      setReceivedMessages((prev) => [...prev, ...data]);
+    }
+    getOldMessage();
+  }, []);
+
+  useEffect(() => {
+    // sent user information
+    socket.emit("joined_room", { username, room });
+
+    //get message from server
     socket.on("message", (data) => {
       setReceivedMessages((prev) => [...prev, data]);
+    });
+
+    // get users from room
+    socket.on("room_users", (data) => {
+      console.log(data);
+      setRoomUsers(data);
     });
     return () => socket.disconnect();
   }, [socket]);
 
+  useEffect(
+    (_) => {
+      if (boxDivRef.current) {
+        boxDivRef.current.scrollTop = boxDivRef.current.scrollHeight;
+      }
+    },
+    [receivedMessages]
+  );
   function handelLeaveRoom() {
+    console.log("YEs");
     navigate("/");
   }
+
+  function handelSentMessage() {
+    if (message.trim().length > 0) {
+      socket.emit("message_send", message);
+      setMessage("");
+    }
+  }
+
   return (
     <section className="flex gap-4 h-screen">
       {/* left side */}
@@ -47,7 +92,7 @@ const Room = ({ username, room, socket }) => {
           {roomUsers.map((user, i) => (
             <p key={i} className="flex items-end gap-1 text-sm my-2">
               <UserIcon width={24} />
-              {user}
+              {user.username === username ? "You" : user.username}
             </p>
           ))}
         </div>
@@ -61,8 +106,8 @@ const Room = ({ username, room, socket }) => {
         </button>
       </div>
       {/* right side */}
-      <div className="w-full pt-5 relative">
-        <div className="h-[30rem] overflow-y-auto">
+      <div className="w-full pt-5 relative" >
+        <div className="h-[30rem] overflow-y-auto" ref={boxDivRef}>
           {receivedMessages.map((msg, i) => (
             <div
               key={i}
@@ -73,7 +118,7 @@ const Room = ({ username, room, socket }) => {
               </p>
               <p className="text-lg font-medium">{msg.message}</p>
               <p className="text-sm font-mono font-medium text-right">
-                {formatDistanceToNow(new Date(1717164414358))}
+                {formatDistanceToNow(new Date(msg.sent_at))}
               </p>
             </div>
           ))}
@@ -83,8 +128,12 @@ const Room = ({ username, room, socket }) => {
             type="text"
             placeholder="message ..."
             className="w-full outline-none border-b text-lg me-2"
+            value={message}
+            onChange={(e) => {
+              setMessage(e.target.value);
+            }}
           />
-          <button type="button">
+          <button type="button" onClick={handelSentMessage}>
             <PaperAirplaneIcon
               width={30}
               className="hover:text-blue-500 hover:-rotate-45 duration-200"
